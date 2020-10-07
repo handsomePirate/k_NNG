@@ -10,6 +10,8 @@ int main(int argc, char* argv[])
 
 	std::vector<AppliedGeometry::VectorN<2, float>> points;
 	std::vector<AppliedGeometry::VectorN<2, int>> pointsint;
+
+#define POINTS points
 	
 	//for (int p = 0; p < pointCount; ++p)
 	//{
@@ -21,13 +23,13 @@ int main(int argc, char* argv[])
 	{
 		for (int x = 0; x < 8; ++x)
 		{
-			points.emplace_back(x * 0.1f, y * 0.1f);
+			POINTS.emplace_back(float(x)/* * 0.1f*/, float(y)/* * 0.1f*/);
 		}
 	}
 
-	std::sort(points.begin(), points.end(), Morton());
+	std::sort(POINTS.begin(), POINTS.end(), Morton());
 
-	for (const auto& point : points)
+	for (const auto& point : POINTS)
 	{
 		std::cout << "(" << point.GetComponent(0) << ", " << point.GetComponent(1) << ")" << std::endl;
 	}
