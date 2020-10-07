@@ -298,6 +298,11 @@ namespace AppliedGeometry
 			return *this / Size();
 		}
 
+		size_t Count()
+		{
+			return N;
+		}
+
 		/// Creates a hash from all the components of the vector.
 		size_t Hash() const
 		{
