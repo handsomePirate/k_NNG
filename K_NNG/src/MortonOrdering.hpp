@@ -1,89 +1,30 @@
 #pragma once
 #include "Vector.hpp"
+#include "Decomposition.hpp"
+#include "SameBitCountConversion.hpp"
 #include <type_traits>
-
 
 #define LOG_PROCESS 0
 #if (LOG_PROCESS == 1)
 #include <iostream>
 #endif
 
-// Templates to convert types of the same bit count.
-// {
-template<typename T>
-struct SameBitCount {};
-
-#define SAME_BIT_CONSTRUCT(T1, T2) \
-template<> struct SameBitCount<T1> { using type = T2; }; \
-template<> struct SameBitCount<T2> { using type = T1; }; \
-
-SAME_BIT_CONSTRUCT(float, int32_t)
-SAME_BIT_CONSTRUCT(double, int64_t)
-
-#define eqtype(T) typename SameBitCount<T>::type
-
-template<typename T>
-union SameBitConverter
-{
-	T x1;
-	eqtype(T) x2;
-};
-// }
-
-template<typename T>
-struct Decomposition {};
-template<>
-struct Decomposition<float> 
-{
-	// mant: 0x007FFFFF
-	// expo: 0x7F800000
-	// sign: 0x80000000
-	// s&e:  0xFF800000
-
-	static inline int32_t MantissaMask()
-	{
-		return 0x007FFFFF;
-	}
-	static inline int32_t MantissaBitCount()
-	{
-		return 23;
-	}
-	static inline int32_t ExponentMask()
-	{
-		return 0x7F800000;
-	}
-	static inline int32_t ExponentComplement()
-	{
-		return 127;
-	}
-};
-template<>
-struct Decomposition<double> 
-{
-	// mant: 0x000FFFFFFFFFFFFF
-	// expo: 0x7FF0000000000000
-	// sign: 0x8000000000000000
-	// s&e:  0xFFF0000000000000
-
-	static inline int64_t MantissaMask()
-	{
-		return 0x000FFFFFFFFFFFFF;
-	}
-	static inline int32_t MantissaBitCount()
-	{
-		return 52;
-	}
-	static inline int64_t ExponentMask()
-	{
-		return 0x7FF0000000000000;
-	}
-	static inline int32_t ExponentComplement()
-	{
-		return 1024;
-	}
-};
-
 using namespace AppliedGeometry;
+
+// The idea here is to enable comparison of two n-dimensional vectors by comparing their coordinates
+// in the dimension that has the highest most significant bit after XORing those two values.
+// For integers, this is straight forward, real numbers have to be considered in a fixed point representation.
+// The format of a floating point number is (-1)^s * m * 2^e, where
+// s = sign,
+// m = mantissa,
+// e = exponent.
+// Thus, the exponent directly controls the position of the most significant bit in fixed point representation.
+// If the exponents are not equal, the greater one is the resulting MSB of the XOR. If they are the same, 
+// it is necessary to XOR the mantissa and add the resulting bit shift to one of the exponents.
+// Ordered in this way, the vectors that are nearby in a linear memory arrangement are also close in the
+// n-dimensional space.
+// Therefore, when working with k nearest neighbours, we want precisely this locality, so that different threads access
+// memory in fewer places, which makes the caches very effective.
 
 // This class is capable of comparing two n-dimensional points & determining their z-order.
 template<int N, typename T>
@@ -116,6 +57,8 @@ public:
 	}
 
 private:
+	// The minimum values of each dimension (needs to be passed into this structure).
+	// They are used to avoid working with negative numbers.
 	std::array<T, N> mins_;
 
 	// This is the main comparison function, it finds the highest most significant bit of all
@@ -145,6 +88,11 @@ private:
 	template<typename Ty, std::enable_if_t<std::is_floating_point<Ty>::value, int> = 0>
 	static int32_t XORMSB(const Ty& a, const Ty& b)
 	{
+		if (a == b)
+		{
+			return INT32_MIN;
+		}
+
 		int32_t exponentA;
 		eqtype(Ty) mantissaA = GetFloatComponents(a, exponentA);
 
@@ -154,10 +102,6 @@ private:
 		const int32_t exponentComplement = Decomposition<Ty>::ExponentComplement();
 		if (exponentA == exponentB)
 		{
-			if (mantissaA == mantissaB)
-			{
-				return INT32_MIN;
-			}
 			int32_t z = MSB<eqtype(Ty)>(mantissaA ^ mantissaB);
 			return exponentA - exponentComplement - Decomposition<Ty>::MantissaBitCount() + z;
 		}
@@ -195,11 +139,11 @@ private:
 		return msb;
 	}
 
-	// This function offers a view of the bits in 'x' through the type 'T' is paired with.
+	// This function offers a view of the bits in 'x' through the type 'Ty' is paired with.
 	template<typename Ty>
 	static eqtype(Ty) ConvertToSameBitCount(const Ty& x)
 	{
-		SameBitConverter<Ty> c;
+		SameBitConvertor<Ty> c;
 		c.x1 = x;
 		return c.x2;
 	}
@@ -210,15 +154,5 @@ private:
 		eqtype(Ty) i = ConvertToSameBitCount(x);
 		e = ((Decomposition<Ty>::ExponentMask() & i) >> Decomposition<Ty>::MantissaBitCount());
 		return Decomposition<Ty>::MantissaMask() & i; // TODO: float -> double
-	}
-	// There are different versions of frexp functions for floats and doubles,
-	// this requires an extra level of abstraction.
-	static float Components(float x, int32_t& e)
-	{
-		return frexpf(x, &e);
-	}
-	static double Components(double x, int32_t& e)
-	{
-		return frexp(x, &e);
 	}
 };
