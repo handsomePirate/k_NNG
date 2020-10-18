@@ -20,15 +20,15 @@ namespace AppliedGeometry
 	{
 		/// Initializer list constructor.
 		template <typename ... List>
-		VectorN(List&& ... components)
-			: components_{ { std::forward<List>(components)... } } {}
+		VectorN(NumericType&& first, List&& ... components)
+			: components_{ { (first, std::forward<List>(components))... } } {}
 		/// Default constructor.
 		VectorN() : components_{} {}
 
 		/// Copy & Move constructors & operators.
-		VectorN(VectorN&& other) noexcept { std::swap(components_, other.components_); }
+		VectorN(VectorN&& other) { std::swap(components_, other.components_); }
 		VectorN(const VectorN& other) { components_ = other.components_; }
-		VectorN& operator=(VectorN&& other) 
+		VectorN& operator=(VectorN&& other)
 		{ 
 			std::swap(components_, other.components_);
 			return *this;
@@ -293,12 +293,12 @@ namespace AppliedGeometry
 		}
 
 		/// Normalizes the vector.
-		VectorN Normalized()
+		VectorN Normalized() const
 		{
 			return *this / Size();
 		}
 
-		size_t Count()
+		size_t Count() const
 		{
 			return N;
 		}
