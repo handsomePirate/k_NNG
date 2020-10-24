@@ -226,7 +226,7 @@ private:
 	KNNGTemplate2/*<N, T, K>*/ static T FarthestPoint(const VectorN<N, T>& point,
 		const KNNGNode<T, K>& edges)
 	{
-		const auto& neighbours = edges[i].GetNeighbours();
+		const auto& neighbours = edges.GetNeighbours();
 		T radius = 0.f;
 		for (int j = 0; j < neighbours.size(); ++j)
 		{
@@ -274,7 +274,7 @@ private:
 			return;
 		}
 
-		if (morton.operator()(points[i], points[m]))
+		if (morton.operator()(points[index], points[m]))
 		{
 			CSearch(edges, points, index, l, m - 1, morton, lower, upper);
 			if (morton.operator()(points[m], upper))
