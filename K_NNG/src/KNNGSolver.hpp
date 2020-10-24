@@ -61,6 +61,7 @@ using namespace AppliedGeometry;
 class KNNGSolver
 {
 public:
+	/*<N, T, K>*/
 	KNNGTemplate2 static std::vector<KNNGNode<T, K>> SolveNaive(const std::vector<VectorN<N, T>>& points)
 	{
 		std::vector<KNNGNode<T, K>> result;
@@ -132,7 +133,7 @@ public:
 			},
 			reduce_struct());
 
-		Morton<2, T> morton(mins.data(), mins.size());
+		Morton<N, T> morton(mins.data(), mins.size());
 
 		tbb::parallel_sort(points.begin(), points.end(), morton);
 
@@ -153,23 +154,13 @@ public:
 			{
 				if (j != 0 && i + j >= 0 && i + j < points.size())
 				{
-					float dist = points[i].DistanceSqr(points[i + j]);
+					T dist = points[i].DistanceSqr(points[i + j]);
 					edges[i].InsertNeighbour(dist, i + j);
 				}
 			}
 			if (precise)
 			{
-				const auto& neighbours = edges[i].GetNeighbours();
-				float radius = 0.f;
-				for (int j = 0; j < neighbours.size(); ++j)
-				{
-					if (radius < neighbours[j].dist)
-					{
-						radius = neighbours[j].dist;
-					}
-				}
-
-				radius = ceil(radius);
+				T radius = ceil(FarthestPoint(points[i], edges[i]));
 				VectorN<2, T> lower = points[i] - radius;
 				VectorN<2, T> upper = points[i] + radius;
 
@@ -221,5 +212,75 @@ public:
 	{
 		std::vector<VectorN<N, T>> pointsCopy = points;
 		return SolveMortonParallel<N, T, K>(std::move(pointsCopy), precise);
+	}
+
+private:
+	KNNGTemplate2/*<N, T, K>*/ static T BoxDist(const VectorN<N, T>& point,
+		const VectorN<N, T>& lower, const VectorN<N, T>& upper)
+	{
+		T dx = (std::max)(lower.GetComponent(0) - point.GetComponent(0), 0, point.GetComponent(0) - upper.GetComponent(0));
+		T dy = (std::max)(lower.GetComponent(1) - point.GetComponent(1), 0, point.GetComponent(1) - upper.GetComponent(1));
+		return sqrt(dx * dx + dy * dy);
+	}
+
+	KNNGTemplate2/*<N, T, K>*/ static T FarthestPoint(const VectorN<N, T>& point,
+		const KNNGNode<T, K>& edges)
+	{
+		const auto& neighbours = edges[i].GetNeighbours();
+		T radius = 0.f;
+		for (int j = 0; j < neighbours.size(); ++j)
+		{
+			if (radius < neighbours[j].dist)
+			{
+				radius = neighbours[j].dist;
+			}
+		}
+		return radius;
+	}
+
+	KNNGTemplate2/*<N, T, K>*/ static void CSearch(std::vector<KNNGNode<T, K>>& edges,
+		const std::vector<VectorN<N, T>>& points, int index, int l, int u,
+		const Morton<N, T>& morton, const VectorN<N, T>& lower, const VectorN<N, T>& upper)
+	{
+		const int closingConstant = 1;
+		if (u - l < closingConstant)
+		{
+			for (int k = l; l <= u; ++k)
+			{
+				// TODO: insert only points, that are not present
+				if (k < index - rad || k > index + rad)
+				{
+					T dist = points[index].DistanceSqr(points[k]);
+					edges[index].InsertNeighbour(dist, k);
+				}
+			}
+			return;
+		}
+
+		int m = (u + l) / 2;
+		T dist = edges[index].DistanceSqr(points[m]);
+		edges[index].InsertNeighbour(dist, m);
+
+		if (BoxDist(points[index], points[l], points[u]) >= FarthestPoint(points[index], edges[index]))
+		{
+			return;
+		}
+
+		if (morton.operator()(points[i], points[m]))
+		{
+			CSearch(edges, points, index, l, m - 1, morton, lower, upper);
+			if (morton.operator()(points[m], upper))
+			{
+				CSearch(edges, points, index, m + 1, u, morton, lower, upper);
+			}
+		}
+		else
+		{
+			CSearch(edges, points, index, m + 1, u, morton, lower, upper);
+			if (morton.operator()(lower, points[m]))
+			{
+				CSearch(edges, points, index, l, m - 1, morton, lower, upper);
+			}
+		}
 	}
 };

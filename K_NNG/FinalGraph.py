@@ -4,8 +4,8 @@ from matplotlib import pyplot as plt
 
 xy = dict()
 edges = []
-readerPoints = csv.DictReader(open('points.csv'))
-readerEdges = csv.DictReader(open('edges.csv'))
+readerPoints = csv.DictReader(open('d:/Projects/git/K_NNG/K_NNG/points.csv'))
+readerEdges = csv.DictReader(open('d:/Projects/git/K_NNG/K_NNG/edges.csv'))
 
 i = 0
 for row in readerPoints:
@@ -15,7 +15,6 @@ for row in readerPoints:
 for row in readerEdges:
     edges.append([float(row['e1']), float(row['e2'])])
 
-#plt.plot(x, y)
 G = nx.DiGraph()
 G.add_nodes_from(xy.keys())
 G.add_edges_from(edges)

@@ -23,7 +23,9 @@ int main(int argc, char* argv[])
 	const float pmax = 1000.f;
 	for (int p = 0; p < pointCount; ++p)
 	{
-		points.emplace_back(rand() % int(pmax) / pmax - .5f, rand() % int(pmax) / pmax - .5f);
+		float x = rand() % int(pmax) / pmax - .5f;
+		float y = rand() % int(pmax) / pmax - .5f;
+		points.emplace_back(x, y);
 	}
 
 	auto result = KNNGSolver::SolveMortonParallel<2, type, K>(std::move(points), false);
