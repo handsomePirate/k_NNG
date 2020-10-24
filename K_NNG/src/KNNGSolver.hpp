@@ -242,13 +242,21 @@ private:
 		const std::vector<VectorN<N, T>>& points, int index, int l, int u,
 		const Morton<N, T>& morton, const VectorN<N, T>& lower, const VectorN<N, T>& upper)
 	{
-		const int closingConstant = 1;
+		const int closingConstant = 4;
 		if (u - l < closingConstant)
 		{
 			for (int k = l; l <= u; ++k)
 			{
-				// TODO: insert only points, that are not present
-				if (k < index - rad || k > index + rad)
+				bool present = false;
+				for (KNNGEdge<T, K>& edge : edges[index].GetNeighbours())
+				{
+					if (edge.next == k)
+					{
+						present = true;
+						break;
+					}
+				}
+				if (k != index && ! present)
 				{
 					T dist = points[index].DistanceSqr(points[k]);
 					edges[index].InsertNeighbour(dist, k);
