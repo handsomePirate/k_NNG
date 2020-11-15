@@ -11,13 +11,11 @@
 #include <limits>
 #include <vector>
 
-#define KNNGTemplate template<typename T, int K>
-#define KNNGTemplate2 template<int N, typename T, int K>
+template<typename T>
+class KNNGNode;
 
-
-KNNGTemplate class KNNGNode;
-
-KNNGTemplate struct KNNGEdge
+template<typename T>
+struct KNNGEdge
 {
 	T dist;
 	int next;
@@ -26,34 +24,38 @@ KNNGTemplate struct KNNGEdge
 		: dist(dist), next(next) {}
 };
 
-
-KNNGTemplate struct KNNGEdgeComparator
+template<typename T>
+struct KNNGEdgeComparator
 {
-	bool operator()(const KNNGEdge<T, K>& e1, const KNNGEdge<T, K>& e2)
+	bool operator()(const KNNGEdge<T>& e1, const KNNGEdge<T>& e2)
 	{
 		return e1.dist < e2.dist;
 	}
 };
 
 
-KNNGTemplate class KNNGNode
+template<typename T>
+class KNNGNode
 {
 public:
-	KNNGNode() = default;
+	KNNGNode(int K)
+		: K_(K) {}
+
 	void InsertNeighbour(T dist, int neighbour)
 	{
 		neighbours_.emplace(dist, neighbour);
-		if (neighbours_.size() > K)
+		if (neighbours_.size() > K_)
 		{
 			neighbours_.pop();
 		}
 	}
-	const std::vector<KNNGEdge<T, K>>& GetNeighbours() const
+	const std::vector<KNNGEdge<T>>& GetNeighbours() const
 	{
 		return Container(neighbours_);
 	}
 private:
-	std::priority_queue<KNNGEdge<T, K>, std::vector<KNNGEdge<T, K>>, KNNGEdgeComparator<T, K>> neighbours_;
+	int K_;
+	std::priority_queue<KNNGEdge<T>, std::vector<KNNGEdge<T>>, KNNGEdgeComparator<T>> neighbours_;
 };
 
 using namespace AppliedGeometry;
@@ -61,13 +63,14 @@ using namespace AppliedGeometry;
 class KNNGSolver
 {
 public:
-	KNNGTemplate2 static std::vector<KNNGNode<T, K>> SolveNaive(const std::vector<VectorN<N, T>>& points)
+	template<typename T, int N>
+	static std::vector<KNNGNode<T>> SolveNaive(const std::vector<VectorN<N, T>>& points)
 	{
-		std::vector<KNNGNode<T, K>> result;
+		std::vector<KNNGNode<T>> result;
 		for (int j = 0; j < points.size(); ++j)
 		{
 			result.emplace_back();
-			KNNGNode<T, K>& node = result[result.size() - 1];
+			KNNGNode<T>& node = result[result.size() - 1];
 			for (int i = 0; i < points.size(); ++i)
 			{
 				if (i != j)
@@ -81,13 +84,13 @@ public:
 	}
 
 #define PARALLEL
-#undef PARALLEL
+//#undef PARALLEL
 
 	/// Solves the K NNG problem using a parallel algorithm that makes use of Morton ordering
 	/// In order to be able to modify the points, they need to be passed in as an rvalue,
 	/// otherwise a copy will need to be made.
-	KNNGTemplate2/*<N, T, K>*/ static std::vector<KNNGNode<T, K>> SolveMortonParallel(
-		std::vector<VectorN<N, T>>&& points, bool precise = true)
+	template<typename T, int N>
+	static std::vector<std::unique_ptr<KNNGNode<T>>> SolveMortonParallel(std::vector<VectorN<N, T>>&& points, int K)
 	{
 		std::vector<T> mins;
 		mins.resize(N);
@@ -132,12 +135,16 @@ public:
 			},
 			reduce_struct());
 
-		Morton<2, T> morton(mins.data(), mins.size());
+		Morton<N, T> morton(mins.data(), mins.size());
 
 		tbb::parallel_sort(points.begin(), points.end(), morton);
 
-		std::vector<KNNGNode<float, K>> edges;
+		std::vector<std::unique_ptr<KNNGNode<float>>> edges;
 		edges.resize(points.size());
+		for (int d = 0; d < edges.size(); ++d)
+		{
+			edges[d] = std::make_unique<KNNGNode<float>>(K);
+		}
 
 		const float c = 1.f;
 
@@ -154,58 +161,7 @@ public:
 				if (j != 0 && i + j >= 0 && i + j < points.size())
 				{
 					float dist = points[i].DistanceSqr(points[i + j]);
-					edges[i].InsertNeighbour(dist, i + j);
-				}
-			}
-			if (precise)
-			{
-				const auto& neighbours = edges[i].GetNeighbours();
-				float radius = 0.f;
-				for (int j = 0; j < neighbours.size(); ++j)
-				{
-					if (radius < neighbours[j].dist)
-					{
-						radius = neighbours[j].dist;
-					}
-				}
-
-				radius = ceil(radius);
-				VectorN<2, T> lower = points[i] - radius;
-				VectorN<2, T> upper = points[i] + radius;
-
-				int u;
-				int l;
-				if (i + ck < points.size() && morton.operator()(upper, points[i + ck]))
-				{
-					u = i;
-				}
-				else
-				{
-					int I = 2;
-					for (; i + I < points.size() && morton.operator()(upper, points[i + I]); I <<= 1) {}
-					u = i + I;
-					if (points.size() <= i + I)
-					{
-						u = points.size() - 1;
-					}
-				}
-				if (i - ck >= 0 && morton.operator()(points[i - ck], lower))
-				{
-					l = i;
-				}
-				else
-				{
-					int I = 2;
-					for (; i - I >= 0 && morton.operator()(points[i - I], lower); I <<= 1) {}
-					l = i - I;
-					if (0 > i - I)
-					{
-						l = 0;
-					}
-				}
-				if (u != l)
-				{
-
+					edges[i]->InsertNeighbour(dist, i + j);
 				}
 			}
 		}
@@ -216,10 +172,10 @@ public:
 		return edges;
 	}
 
-	KNNGTemplate2/*<N, T, K>*/ static std::vector<KNNGNode<T, K>> SolveMortonParallel(
-		const std::vector<VectorN<N, T>>& points, bool precise = true)
+	template<typename T, int N>
+	static std::vector<std::unique_ptr<KNNGNode<T>>> SolveMortonParallel(const std::vector<VectorN<N, T>>& points, int K)
 	{
 		std::vector<VectorN<N, T>> pointsCopy = points;
-		return SolveMortonParallel<N, T, K>(std::move(pointsCopy), precise);
+		return SolveMortonParallel<T, N>(std::move(pointsCopy), K);
 	}
 };
