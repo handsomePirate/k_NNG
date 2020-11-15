@@ -22,12 +22,14 @@ std::vector<std::string> Split(const std::string& str, const char delimiter = ' 
 
 int main(int argc, char* argv[])
 {
+	// Check the argument count to make sure there is exactly one parameter.
 	if (argc != 2)
 	{
 		std::cout << "Usage: <exe> <txt-with-points>" << std::endl;
 		return 0;
 	}
 
+	// Try opening the file input stream.
 	std::string filename = argv[1];
 	int dim = 0;
 	std::ifstream ifs(filename);
@@ -38,6 +40,7 @@ int main(int argc, char* argv[])
 	}
 	std::string line;
 	std::getline(ifs, line);
+	// Get K = number of neighbours for each vertex in the graph.
 	int K;
 	try
 	{
@@ -51,6 +54,7 @@ int main(int argc, char* argv[])
 	std::vector<AppliedGeometry::VectorN<2, float>> vec2d;
 	std::vector<AppliedGeometry::VectorN<3, float>> vec3d;
 
+	// Read the file.
 	while (ifs.good() && !ifs.eof())
 	{
 		std::getline(ifs, line);
@@ -87,7 +91,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-
+	// Runs the approximate algorithm.
 	std::vector<std::unique_ptr<KNNGNode<float>>> result;
 	if (dim == 2)
 	{
@@ -98,6 +102,7 @@ int main(int argc, char* argv[])
 		result = KNNGSolver::SolveMortonParallel<float, 3>(std::move(vec3d), K);
 	}
 
+	// Output results into csvs.
 	std::ofstream ofsPoints("points.csv");
 	ofsPoints << "x,y" << std::endl;
 	for (int i = 0; i < vec2d.size(); ++i)

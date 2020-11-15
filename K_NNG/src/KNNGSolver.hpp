@@ -86,12 +86,13 @@ public:
 #define PARALLEL
 //#undef PARALLEL
 
-	/// Solves the K NNG problem using a parallel algorithm that makes use of Morton ordering
-	/// In order to be able to modify the points, they need to be passed in as an rvalue,
-	/// otherwise a copy will need to be made.
+	/// Aproximately solves the K NNG problem using a parallel algorithm that makes use of Morton ordering.
+	/// The points need to be sorted according to the Morton ordering, therefore they need to be passed in
+	/// as an rvalue.
 	template<typename T, int N>
 	static std::vector<std::unique_ptr<KNNGNode<T>>> SolveMortonParallel(std::vector<VectorN<N, T>>&& points, int K)
 	{
+		// Find the minimum in every coordinate so that the morton ordering starts at 0.
 		std::vector<T> mins;
 		mins.resize(N);
 		for (T& min : mins)
@@ -135,8 +136,10 @@ public:
 			},
 			reduce_struct());
 
+		// Create the morton ordering object
 		Morton<N, T> morton(mins.data(), mins.size());
 
+		// Use it to sort the input points.
 		tbb::parallel_sort(points.begin(), points.end(), morton);
 
 		std::vector<std::unique_ptr<KNNGNode<float>>> edges;
@@ -146,6 +149,7 @@ public:
 			edges[d] = std::make_unique<KNNGNode<float>>(K);
 		}
 
+		// Find the closest neighbours for each vertex from the vertices before and after the current vertex.
 		const float c = 1.f;
 
 		static const int ck = int(c * K);
@@ -170,12 +174,5 @@ public:
 #endif
 
 		return edges;
-	}
-
-	template<typename T, int N>
-	static std::vector<std::unique_ptr<KNNGNode<T>>> SolveMortonParallel(const std::vector<VectorN<N, T>>& points, int K)
-	{
-		std::vector<VectorN<N, T>> pointsCopy = points;
-		return SolveMortonParallel<T, N>(std::move(pointsCopy), K);
 	}
 };
