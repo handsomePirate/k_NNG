@@ -3,6 +3,7 @@
 #include "Decomposition.hpp"
 #include "SameBitCountConversion.hpp"
 #include <type_traits>
+#include <iostream>
 
 #define LOG_PROCESS 0
 #if (LOG_PROCESS == 1)
@@ -10,6 +11,129 @@
 #endif
 
 using namespace AppliedGeometry;
+
+inline int lzcount32(uint32_t x)
+{
+	int r = 0;
+
+	while (x >>= 1)
+		r++;
+	return r;
+}
+
+inline int lzcount64(uint64_t x)
+{
+	int r = 0;
+
+	while (x >>= 1)
+		r++;
+	return r;
+}
+
+typedef union { float f; int32_t i; uint32_t u; } union32_t;
+typedef union { double f; int64_t i; uint64_t u; } union64_t;
+
+inline uint32_t ieee_exponent(float f)
+{
+	union32_t u;
+	u.f = f;
+	return (u.i & 0x7f800000) >> 23;
+}
+
+inline uint32_t ieee_mantissa(float f)
+{
+	union32_t u;
+	u.f = f;
+	return (u.i & 0x007FFFFF);
+}
+
+inline uint64_t ieee_exponent(double f)
+{
+	union64_t u;
+	u.f = f;
+	return (u.i & 0x7ff0000000000000ll) >> 52;
+}
+
+inline uint64_t ieee_mantissa(double f)
+{
+	union64_t u;
+	u.f = f;
+	return (u.i & 0x000fffffffffffffll);
+}
+
+void WriteBinFloat(float x, std::ostream& os)
+{
+	unsigned int* px = (unsigned int*)&x;
+	os << '(';
+	for (unsigned int b = 0x80000000; b > 0; b >>= 1)
+	{
+		if (*px & b)
+		{
+			os << '1';
+		}
+		else
+		{
+			os << '0';
+		}
+		if (b == 0x80000000 || b == 0x00800000)
+		{
+			os << ' ';
+		}
+	}
+	os << " -> ";
+	int exp;
+	frexpf(x, &exp);
+	os << "exp=" << exp;
+	os << ')';
+}
+
+template<int ND, class FloatType>
+class FloatMortonLess
+{
+public:
+	bool operator() (const VectorN<ND, FloatType>& v1, const VectorN<ND, FloatType>& v2) const
+	{
+		int x(0), dim(0);
+
+		for (int j = 0; j < ND; ++j) 
+		{
+			int y = xormsb(v1.GetComponent(j), v2.GetComponent(j));
+
+			if (x < y) 
+			{
+				x = y;
+				dim = j;
+			}
+		}
+
+		return v1.GetComponent(dim) < v2.GetComponent(dim);
+	}
+
+private:
+	int xormsb(FloatType a, FloatType b) const
+	{
+		int x = ieee_exponent(a);
+		int y = ieee_exponent(b);
+
+		if (x == y)
+		{
+			int z = msdb(ieee_mantissa(a), ieee_mantissa(b));
+			return x - z;
+		}
+
+		return (y < x) ? x : y;
+	}
+
+	int msdb(uint32_t a, uint32_t b) const 
+	{
+		return 32 - lzcount32(a ^ b);
+	}
+
+	int msdb(uint64_t a, uint64_t b) const 
+	{
+		return 64 - lzcount64(a ^ b);
+	}
+};
 
 // The idea here is to enable comparison of two n-dimensional vectors by comparing their coordinates
 // in the dimension that has the highest most significant bit after XORing those two values.
@@ -71,6 +195,12 @@ private:
 		int32_t y;
 		for (int32_t n = 0; n < N; ++n)
 		{
+			//float x1 = v1.GetComponent(n) - mins_[n];
+			//float x2 = v2.GetComponent(n) - mins_[n];
+			//WriteBinFloat(x1, std::cout);
+			//std::cout << ',';
+			//WriteBinFloat(x2, std::cout);
+			//std::cout << std::endl;
 			y = XORMSB<T>(v1.GetComponent(n) - mins_[n], v2.GetComponent(n) - mins_[n]);
 			if (x < y)
 			{
@@ -81,6 +211,7 @@ private:
 #if (LOG_PROCESS == 1)
 		std::cout << v1.ToString() << " x " << v2.ToString() << " => " << (v1.GetComponent(d) < v2.GetComponent(d)) << std::endl;
 #endif
+		//std::cout << std::endl;
 		return v1.GetComponent(d) < v2.GetComponent(d);
 }
 

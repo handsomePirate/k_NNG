@@ -11,6 +11,13 @@
 #include <limits>
 #include <vector>
 
+#define MortonMethod 1
+#if (MortonMethod == 1)
+#define MortonClass Morton
+#else
+#define MortonClass FloatMortonLess
+#endif
+
 #define KNNGTemplate template<typename T, int K>
 #define KNNGTemplate2 template<int N, typename T, int K>
 
@@ -124,7 +131,7 @@ public:
 					{
 						if (points[i].GetComponent(d) < localMinsRes[d])
 						{
-							localMinsRes[d] = points[i].GetComponent(d);
+							localMinsRes[d] = points[i].GetComponent(d) - 0.5f;
 						}
 					}
 				}
@@ -133,7 +140,11 @@ public:
 			},
 			reduce_struct());
 
-		Morton<N, T> morton(mins.data(), mins.size());
+#if (MortonMethod == 1)
+		MortonClass<N, T> morton(mins.data(), mins.size());
+#else
+		MortonClass<N, T> morton;
+#endif
 
 		tbb::parallel_sort(points.begin(), points.end(), morton);
 
@@ -196,7 +207,7 @@ public:
 				}
 				if (u != l)
 				{
-
+					//CSearch(edges, points, i, l, u, morton, lower, upper);
 				}
 			}
 		}
@@ -215,11 +226,13 @@ public:
 	}
 
 private:
-	KNNGTemplate2/*<N, T, K>*/ static T BoxDist(const VectorN<N, T>& point,
+	template<typename T, int N> static T BoxDist(const VectorN<N, T>& point,
 		const VectorN<N, T>& lower, const VectorN<N, T>& upper)
 	{
-		T dx = (std::max)(lower.GetComponent(0) - point.GetComponent(0), 0, point.GetComponent(0) - upper.GetComponent(0));
-		T dy = (std::max)(lower.GetComponent(1) - point.GetComponent(1), 0, point.GetComponent(1) - upper.GetComponent(1));
+		T dx = (std::max)((std::max)(lower.GetComponent(0) - point.GetComponent(0), T(0)),
+			point.GetComponent(0) - upper.GetComponent(0));
+		T dy = (std::max)((std::max)(lower.GetComponent(1) - point.GetComponent(1), T(0)),
+			point.GetComponent(1) - upper.GetComponent(1));
 		return sqrt(dx * dx + dy * dy);
 	}
 
@@ -240,15 +253,15 @@ private:
 
 	KNNGTemplate2/*<N, T, K>*/ static void CSearch(std::vector<KNNGNode<T, K>>& edges,
 		const std::vector<VectorN<N, T>>& points, int index, int l, int u,
-		const Morton<N, T>& morton, const VectorN<N, T>& lower, const VectorN<N, T>& upper)
+		const MortonClass<N, T>& morton, const VectorN<N, T>& lower, const VectorN<N, T>& upper)
 	{
-		const int closingConstant = 4;
+		const int closingConstant = K * 2;
 		if (u - l < closingConstant)
 		{
-			for (int k = l; l <= u; ++k)
+			for (int k = l; k <= u; ++k)
 			{
 				bool present = false;
-				for (KNNGEdge<T, K>& edge : edges[index].GetNeighbours())
+				for (const KNNGEdge<T, K>& edge : edges[index].GetNeighbours())
 				{
 					if (edge.next == k)
 					{
@@ -256,7 +269,7 @@ private:
 						break;
 					}
 				}
-				if (k != index && ! present)
+				if (k != index && ! present && k >= 0 && k < points.size())
 				{
 					T dist = points[index].DistanceSqr(points[k]);
 					edges[index].InsertNeighbour(dist, k);
@@ -266,8 +279,11 @@ private:
 		}
 
 		int m = (u + l) / 2;
-		T dist = edges[index].DistanceSqr(points[m]);
-		edges[index].InsertNeighbour(dist, m);
+		if (m != index)
+		{
+			T dist = points[index].DistanceSqr(points[m]);
+			edges[index].InsertNeighbour(dist, m);
+		}
 
 		if (BoxDist(points[index], points[l], points[u]) >= FarthestPoint(points[index], edges[index]))
 		{

@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 
 x = []
 y = []
-reader = csv.DictReader(open('out.csv'))
+reader = csv.DictReader(open('D:/Projects/git/K_NNG/K_NNG/points.csv'))
 
 for row in reader:
     x.append(float(row['x']))
