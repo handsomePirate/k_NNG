@@ -20,15 +20,17 @@ namespace AppliedGeometry
 	{
 		/// Initializer list constructor.
 		template <typename ... List>
-		VectorN(NumericType&& first, List&& ... components)
-			: components_{ { (first, std::forward<List>(components))... } } {}
+		VectorN(NumericType& first, List&& ... components)
+		{
+			Construct(0, first, std::forward<List>(components)...);
+		}
 		/// Default constructor.
 		VectorN() : components_{} {}
 
 		/// Copy & Move constructors & operators.
-		VectorN(VectorN&& other) { std::swap(components_, other.components_); }
+		VectorN(VectorN&& other) noexcept { std::swap(components_, other.components_); }
 		VectorN(const VectorN& other) { components_ = other.components_; }
-		VectorN& operator=(VectorN&& other)
+		VectorN& operator=(VectorN&& other) noexcept
 		{ 
 			std::swap(components_, other.components_);
 			return *this;
@@ -342,6 +344,16 @@ namespace AppliedGeometry
 			return ss.str();
 		}
 	protected:
+		template<typename ... List>
+		void Construct(int I, NumericType & first, List&& ... rest)
+		{
+			components_[I] = first;
+			Construct(I + 1, std::forward<List>(rest)...);
+		}
+		void Construct(int I, NumericType & last)
+		{
+			components_[I] = last;
+		}
 		/// The components of the N-dimensional point.
 		std::array<NumericType, N> components_;
 	};

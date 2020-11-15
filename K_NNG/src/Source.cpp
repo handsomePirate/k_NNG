@@ -74,11 +74,16 @@ int main(int argc, char* argv[])
 		}
 		if (dim == 2)
 		{
-			vec2d.emplace_back(stof(splitLine[0]), stof(splitLine[1]));
+			float x = std::stof(splitLine[0]);
+			float y = std::stof(splitLine[1]);
+			vec2d.emplace_back(x, y);
 		}
 		else if (dim == 3)
 		{
-			vec3d.emplace_back(stof(splitLine[0]), stof(splitLine[1]), stof(splitLine[2]));
+			float x = std::stof(splitLine[0]);
+			float y = std::stof(splitLine[1]);
+			float z = std::stof(splitLine[2]);
+			vec3d.emplace_back(x, y, z);
 		}
 	}
 
